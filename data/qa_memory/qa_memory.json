@@ -1,0 +1,24 @@
+[
+  {
+    "id": "df4f1adf7eb94ea3984eb3c31318af05",
+    "question": "What is SLA",
+    "answer": "- SLAs cover system availability, support responsiveness, resolution times; formalized in writing.\n- Vendor required to provide clear reporting and regular service reviews for tracking issues and planning improvements.\n- Expectations include uptime guarantees of at least 99.75% monthly as part of SLAs.\n- SLA must state response time expectations, such as P1 within 1 hour by severity level.",
+    "tags": [
+      "manual"
+    ],
+    "approved": true,
+    "source_docs": [],
+    "created_at": "2026-05-08T15:07:53.938929"
+  },
+  {
+    "id": "a7a43203626747b59925a34695f4f442",
+    "question": "who is co-founder of authenticlabs",
+    "answer": "- Tamer Ali, Co-founder/CEO, tamer@authenticlabs.io",
+    "tags": [
+      "manual"
+    ],
+    "approved": true,
+    "source_docs": [],
+    "created_at": "2026-05-08T15:08:38.466793"
+  }
+]

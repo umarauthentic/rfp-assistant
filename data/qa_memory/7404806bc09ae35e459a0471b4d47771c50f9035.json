@@ -1,0 +1,11 @@
+{
+  "id": "7404806bc09ae35e459a0471b4d47771c50f9035",
+  "question": "What is SLA",
+  "answer": "- SLAs define the expected level of service provided, including specifics such as response times by severity (e.g., P1 within 1 hour).\n- Service and Support expectations include a guarantee for monthly uptime at or above 99.97%.\n- Requirements entail full support provisions with formalized SLAs covering system availability, responsiveness, resolution times, and satisfaction metrics.",
+  "tags": [
+    "manual"
+  ],
+  "approved": true,
+  "source_docs": [],
+  "created_at": "2026-05-08T15:43:38.795246+00:00"
+}

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RFP Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="layout">
+
+    <aside class="sidebar">
+        <h3>Saved Answers</h3>
+        <input type="text" id="search" placeholder="Search saved answers..." oninput="filterMemory()">
+        <div id="memoryList"></div>
+    </aside>
+
+    <main class="container">
+        <h1>RFP Assistant</h1>
+
+        <div class="card">
+            <textarea id="query" placeholder="Ask your RFP question..."></textarea>
+
+            <div class="buttons">
+                <button onclick="ask()">Submit</button>
+                <button onclick="save()">💾 Save</button>
+            </div>
+        </div>
+
+        <div id="loader" class="loader hidden"></div>
+
+        <div id="result" class="answer hidden">
+            <div class="answer-header">
+                <span id="badge"></span>
+                <div>
+                    <button onclick="copyAnswer()">📋 Copy</button>
+                    <button onclick="toggleEdit()">✏ Edit</button>
+                </div>
+            </div>
+
+            <textarea id="editBox" class="hidden"></textarea>
+            <div id="answerText"></div>
+        </div>
+
+        <div id="source" class="source"></div>
+
+        <h3>History</h3>
+        <div id="history" class="history"></div>
+    </main>
+
+</div>
+
+<script src="/static/app.js"></script>
+
+</body>
+</html>
