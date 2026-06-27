@@ -52,6 +52,27 @@ body {
     font-size: 14px;
 }
 
+.memory-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.memory-delete {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    margin: 0;
+    border-radius: 6px;
+    background: #fee2e2;
+    color: #991b1b;
+    font-size: 11px;
+}
+
+.memory-delete:hover {
+    background: #fecaca;
+}
+
 .memory-answer {
     font-size: 12px;
     color: #6b7280;
@@ -109,6 +130,147 @@ button:hover {
     background: #3655d4;
 }
 
+button.secondary {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+button.secondary:hover {
+    background: #d1d5db;
+}
+
+.section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.section-header h2 {
+    margin: 0 0 4px;
+    font-size: 21px;
+}
+
+.section-header p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.template-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.template-actions input {
+    max-width: 230px;
+    font-size: 13px;
+}
+
+.rfp-builder {
+    margin-top: 20px;
+}
+
+.builder-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.builder-grid label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.builder-grid textarea {
+    min-height: 120px;
+    margin-bottom: 10px;
+}
+
+.builder-status {
+    margin-top: 12px;
+    color: #4b5563;
+    font-size: 13px;
+}
+
+.rfp-items {
+    margin-top: 16px;
+}
+
+.rfp-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    background: #f9fafb;
+}
+
+.rfp-item-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.rfp-item-header > div:last-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.rfp-item-status {
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.rfp-error {
+    margin-top: 8px;
+    color: #991b1b;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.rfp-references {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    color: #475569;
+    font-size: 12px;
+}
+
+.rfp-reference {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    padding: 4px 8px;
+    background: #eef2ff;
+    color: #334155;
+    font-weight: 700;
+}
+
+.rfp-question {
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.rfp-answer {
+    min-height: 110px;
+    max-height: none;
+    background: #ffffff;
+}
+
 .answer {
     margin-top: 20px;
 }
@@ -128,6 +290,55 @@ button:hover {
 #answerText {
     line-height: 1.6;
     white-space: pre-wrap;
+}
+
+.answer-list {
+    margin: 0;
+    padding-left: 22px;
+    line-height: 1.6;
+}
+
+.answer-list li {
+    margin-bottom: 8px;
+}
+
+.response-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.tag-chip {
+    background: #eef2ff;
+    color: #334155;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    padding: 7px 11px;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.tag-chip:hover {
+    background: #dbeafe;
+}
+
+.tag-preview {
+    margin-top: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f8fafc;
+    padding: 12px;
+    font-size: 13px;
+}
+
+.tag-preview pre {
+    margin: 8px 0 0;
+    white-space: pre-wrap;
+    font-family: inherit;
+    line-height: 1.5;
+    color: #475569;
 }
 
 #editBox {
@@ -164,5 +375,26 @@ button:hover {
 @keyframes spin {
     100% {
         transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 900px) {
+    .layout {
+        display: block;
+    }
+
+    .sidebar {
+        width: auto;
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .builder-grid,
+    .section-header {
+        display: block;
+    }
+
+    .section-header button {
+        margin-top: 12px;
     }
 }

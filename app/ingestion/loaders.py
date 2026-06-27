@@ -73,5 +73,7 @@ def load_file(path: Path) -> list[str]:
 
 def iter_supported_files(directory: Path) -> Iterable[Path]:
     for path in directory.rglob("*"):
+        if path.name.startswith("~$"):
+            continue
         if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
             yield path

@@ -29,6 +29,8 @@ class FaissStore:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         if self.index is not None:
             faiss.write_index(self.index, str(self.index_path))
+        elif self.index_path.exists():
+            self.index_path.unlink()
         self.meta_path.write_text(
             json.dumps([c.model_dump() for c in self.chunks], indent=2, ensure_ascii=False),
             encoding="utf-8",

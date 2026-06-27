@@ -8,43 +8,44 @@
 
 <div class="layout">
 
-    <aside class="sidebar">
-        <h3>Saved Answers</h3>
-        <input type="text" id="search" placeholder="Search saved answers..." oninput="filterMemory()">
-        <div id="memoryList"></div>
-    </aside>
-
     <main class="container">
-        <h1>RFP Assistant</h1>
+        <h1>RFP Builder</h1>
 
-        <div class="card">
-            <textarea id="query" placeholder="Ask your RFP question..."></textarea>
-
-            <div class="buttons">
-                <button onclick="ask()">Submit</button>
-                <button onclick="save()">💾 Save</button>
-            </div>
-        </div>
-
-        <div id="loader" class="loader hidden"></div>
-
-        <div id="result" class="answer hidden">
-            <div class="answer-header">
-                <span id="badge"></span>
+        <section class="card rfp-builder">
+            <div class="section-header">
                 <div>
-                    <button onclick="copyAnswer()">📋 Copy</button>
-                    <button onclick="toggleEdit()">✏ Edit</button>
+                    <h2>Vendor Response Builder</h2>
+                    <p>Add questions one by one, paste a full list, or upload a Word RFP template.</p>
+                </div>
+                <div class="template-actions">
+                    <input type="file" id="rfpTemplateFile" accept=".docx">
+                    <button onclick="uploadRfpTemplate()">Upload Template</button>
                 </div>
             </div>
 
-            <textarea id="editBox" class="hidden"></textarea>
-            <div id="answerText"></div>
-        </div>
+            <div class="builder-grid">
+                <div>
+                    <label for="rfpSingleQuestion">One question</label>
+                    <textarea id="rfpSingleQuestion" placeholder="Enter one RFP question..."></textarea>
+                    <button onclick="addRfpQuestion()">Add Question</button>
+                </div>
 
-        <div id="source" class="source"></div>
+                <div>
+                    <label for="rfpQuestionList">Question list</label>
+                    <textarea id="rfpQuestionList" placeholder="Paste one question per line, or use numbered/bulleted lines..."></textarea>
+                    <button onclick="addRfpQuestionList()">Add List</button>
+                </div>
+            </div>
 
-        <h3>History</h3>
-        <div id="history" class="history"></div>
+            <div class="buttons">
+                <button onclick="generateRfpAnswers()">Generate Answers</button>
+                <button onclick="downloadRfpDocx()">Generate DOCX</button>
+                <button class="secondary" onclick="clearRfpBuilder()">Clear</button>
+            </div>
+
+            <div id="rfpStatus" class="builder-status"></div>
+            <div id="rfpItems" class="rfp-items"></div>
+        </section>
     </main>
 
 </div>

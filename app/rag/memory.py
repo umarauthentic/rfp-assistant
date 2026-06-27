@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
 import hashlib
 import json
+import re
 
 from app.config import get_settings
 from app.rag.models import Chunk, SaveAnswerRequest
 from app.rag.vector_store import FaissStore
+
+QA_ID_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 
 
 def save_qa_to_disk(request: SaveAnswerRequest) -> dict:
@@ -51,10 +54,27 @@ def list_memory_items() -> list[dict]:
     return sorted(items, key=lambda x: x.get("created_at", ""), reverse=True)
 
 
+def delete_qa_from_disk(qa_id: str) -> bool:
+    if not QA_ID_PATTERN.fullmatch(qa_id):
+        return False
+
+    settings = get_settings()
+    path = settings.qa_memory_dir / f"{qa_id}.json"
+
+    if not path.exists() or not path.is_file():
+        return False
+
+    path.unlink()
+    return True
+
+
 def load_qa_chunks() -> list[Chunk]:
     chunks = []
 
     for item in list_memory_items():
+        if not item.get("approved", True):
+            continue
+
         text = f"Question: {item.get('question', '')}\nAnswer: {item.get('answer', '')}"
 
         chunks.append(
