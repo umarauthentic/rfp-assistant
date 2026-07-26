@@ -9,6 +9,12 @@ logger = logging.getLogger(__name__)
 INSUFFICIENT_INFORMATION = "I could not find sufficient information in the provided data."
 
 
+def _is_insufficient_answer(answer: str) -> bool:
+    normalized_answer = " ".join(answer.strip().rstrip(".").lower().split())
+    normalized_marker = " ".join(INSUFFICIENT_INFORMATION.rstrip(".").lower().split())
+    return normalized_answer.startswith(normalized_marker)
+
+
 def _clean_text(text: str) -> str:
     if not text:
         return ""
@@ -196,6 +202,15 @@ def answer_query(
 
     llm = get_llm_client()
     answer = llm.generate(prompt)
+
+    if _is_insufficient_answer(answer):
+        return QueryResponse(
+            answer=INSUFFICIENT_INFORMATION,
+            from_memory=False,
+            memory_matches=[],
+            document_matches=[],
+            response_tags=[],
+        )
 
     return QueryResponse(
         answer=answer,

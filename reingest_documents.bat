@@ -8,5 +8,6 @@ if not exist ".venv\Scripts\activate.bat" (
 )
 
 call ".venv\Scripts\activate.bat"
-python scripts\reingest_documents.py
+set "PYTHONPATH=%~dp0"
+python "%~dp0scripts\reingest_documents.py"
 pause

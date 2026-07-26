@@ -1,13 +1,15 @@
 from pathlib import Path
 import shutil
 import re
+import base64
+import secrets
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import requests
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -64,6 +66,35 @@ class RfpSingleAnswerRequest(BaseModel):
 class RfpBuildRequest(BaseModel):
     items: list[RfpQuestionItem] = Field(min_length=1, max_length=200)
     title: str = Field(default="Generated RFP Response", max_length=200)
+
+
+def _is_authorized(request: Request) -> bool:
+    if not settings.app_password:
+        return True
+
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "basic" or not token:
+        return False
+
+    try:
+        decoded = base64.b64decode(token).decode("utf-8")
+    except Exception:
+        return False
+
+    _, _, password = decoded.partition(":")
+    return secrets.compare_digest(password, settings.app_password)
+
+
+@app.middleware("http")
+async def require_app_password(request: Request, call_next):
+    if request.url.path == "/health" or _is_authorized(request):
+        return await call_next(request)
+
+    return Response(
+        status_code=401,
+        headers={"WWW-Authenticate": 'Basic realm="RFP Assistant"'},
+    )
 
 
 def _normalize_match_text(value: str) -> str:

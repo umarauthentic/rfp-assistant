@@ -4,11 +4,17 @@ let lastMatches = [];
 let memoryData = [];
 let history = [];
 let rfpItems = [];
+let rfpGenerationState = "idle";
+let rfpGenerationPaused = false;
+let activeGenerationPromise = null;
+const RFP_GENERATION_BATCH_SIZE = 5;
 
 document.addEventListener("DOMContentLoaded", function () {
     if (document.getElementById("memoryList")) {
         loadMemory();
     }
+
+    updateDetectionMode();
 
     const textarea = document.getElementById("query");
     if (!textarea) {
@@ -147,6 +153,110 @@ function setRfpStatus(message) {
     }
 }
 
+function setDocumentStatus(message) {
+    const status = document.getElementById("documentStatus");
+    if (status) {
+        status.textContent = message || "";
+    }
+}
+
+function setGenerationUi(state, message) {
+    rfpGenerationState = state;
+
+    const indicator = document.getElementById("generationIndicator");
+    const indicatorText = document.getElementById("generationIndicatorText");
+    const generateButton = document.getElementById("generateAnswersButton");
+    const pauseButton = document.getElementById("pauseAnswersButton");
+    const resumeButton = document.getElementById("resumeAnswersButton");
+
+    if (indicator && indicatorText) {
+        indicatorText.textContent = message || "Generating answers";
+        indicator.classList.toggle("hidden", state === "idle");
+        indicator.classList.toggle("is-paused", state === "paused");
+    }
+
+    if (generateButton) {
+        generateButton.disabled = state === "running" || state === "paused";
+    }
+
+    if (pauseButton) {
+        pauseButton.classList.toggle("hidden", state !== "running");
+    }
+
+    if (resumeButton) {
+        resumeButton.classList.toggle("hidden", state !== "paused");
+    }
+}
+
+function isRfpGenerationActive() {
+    return rfpGenerationState === "running" || rfpGenerationState === "paused";
+}
+
+function getSelectedDetectionMode() {
+    const selected = document.querySelector("input[name='questionDetectionMode']:checked");
+    return selected ? selected.value : "auto";
+}
+
+function updateDetectionMode() {
+    const mode = getSelectedDetectionMode();
+    const tableFields = document.getElementById("tableDetectionFields");
+    const textFields = document.getElementById("textDetectionFields");
+    const showTableFields = ["auto", "tables", "mixed"].includes(mode);
+    const showTextFields = ["auto", "lists", "paragraphs", "mixed"].includes(mode);
+
+    if (tableFields) {
+        tableFields.classList.toggle("is-muted", !showTableFields);
+    }
+
+    if (textFields) {
+        textFields.classList.toggle("is-muted", !showTextFields);
+    }
+}
+
+function getDetectionSettings() {
+    return {
+        mode: getSelectedDetectionMode(),
+        questionColumn: (document.getElementById("questionColumnHint")?.value || "Auto").trim() || "Auto",
+        answerColumn: (document.getElementById("answerColumnHint")?.value || "Auto").trim() || "Auto",
+        sheetTable: (document.getElementById("sheetTableHint")?.value || "All").trim() || "All",
+        missingAnswerColumnMode: document.getElementById("missingAnswerColumnMode")?.value || "create",
+        keywords: (document.getElementById("questionKeywordHint")?.value || "").trim(),
+        answerPlacement: document.getElementById("answerPlacementMode")?.value || "after-question",
+        answerPrefix: (document.getElementById("answerPrefix")?.value || "ANSWER:").trim() || "ANSWER:",
+        reviewThreshold: document.getElementById("reviewThreshold")?.value || "balanced"
+    };
+}
+
+function applyDetectionSettings() {
+    const settings = getDetectionSettings();
+    const summary = document.getElementById("detectionSummary");
+
+    if (!summary) {
+        return;
+    }
+
+    const placementLabels = {
+        "after-question": "insert after each question",
+        "new-paragraph": "new paragraph below",
+        "append-section": "append response section"
+    };
+    const missingColumnLabels = {
+        "create": "create response column",
+        "next-empty": "use next empty column",
+        "append": "append response section"
+    };
+
+    summary.innerHTML = `
+        <div><strong>Mode:</strong> ${escapeHtml(settings.mode)}</div>
+        <div><strong>Question column:</strong> ${escapeHtml(settings.questionColumn)} | <strong>Answer column:</strong> ${escapeHtml(settings.answerColumn)}</div>
+        <div><strong>Tables:</strong> ${escapeHtml(settings.sheetTable)} | ${escapeHtml(missingColumnLabels[settings.missingAnswerColumnMode] || settings.missingAnswerColumnMode)}</div>
+        <div><strong>Text answers:</strong> ${escapeHtml(placementLabels[settings.answerPlacement] || settings.answerPlacement)} with ${escapeHtml(settings.answerPrefix)}</div>
+        <div><strong>Review:</strong> ${escapeHtml(settings.reviewThreshold)}</div>
+    `;
+
+    setRfpStatus("Detection setup applied. Add or load questions for review.");
+}
+
 function parseQuestionList(value) {
     return (value || "")
         .split(/\r?\n/)
@@ -202,20 +312,24 @@ function renderRfpItems() {
         return;
     }
 
-    container.innerHTML = rfpItems.map((item, index) => `
-        <div class="rfp-item">
+    container.innerHTML = rfpItems.map((item, index) => {
+        const isGenerating = item.status === "generating" || String(item.status || "").startsWith("rate limited");
+        return `
+        <div class="rfp-item ${isGenerating ? "is-generating" : ""}">
             <div class="rfp-item-header">
                 <div class="rfp-question">${index + 1}. ${escapeHtml(item.question)}</div>
                 <div>
+                    ${isGenerating ? `<span class="inline-loader" aria-hidden="true"></span>` : ""}
                     <span class="rfp-item-status">${escapeHtml(item.status || "pending")}</span>
-                    <button class="secondary" type="button" onclick="removeRfpItem(${index})">Remove</button>
+                    <button class="secondary" type="button" onclick="removeRfpItem(${index})" ${isRfpGenerationActive() ? "disabled" : ""}>Remove</button>
                 </div>
             </div>
             <textarea class="rfp-answer" data-rfp-index="${index}" oninput="updateRfpAnswer(${index}, this.value)" placeholder="Generated answer will appear here...">${escapeHtml(item.answer || "")}</textarea>
             ${renderRfpReferences(item.references || [])}
             ${item.error ? `<div class="rfp-error">${escapeHtml(item.error)}</div>` : ""}
         </div>
-    `).join("");
+    `;
+    }).join("");
 }
 
 function renderRfpReferences(references) {
@@ -244,12 +358,22 @@ function updateRfpAnswer(index, value) {
 }
 
 function removeRfpItem(index) {
+    if (isRfpGenerationActive()) {
+        alert("Pause or finish answer generation before removing questions.");
+        return;
+    }
+
     rfpItems.splice(index, 1);
     renderRfpItems();
     setRfpStatus(rfpItems.length ? `${rfpItems.length} question${rfpItems.length === 1 ? "" : "s"} ready.` : "");
 }
 
 function clearRfpBuilder() {
+    if (isRfpGenerationActive()) {
+        alert("Pause or finish answer generation before clearing questions.");
+        return;
+    }
+
     rfpItems = [];
     renderRfpItems();
     setRfpStatus("");
@@ -301,6 +425,58 @@ async function uploadRfpTemplate() {
     }
 }
 
+async function uploadDocument() {
+    const input = document.getElementById("documentFile");
+    const file = input && input.files ? input.files[0] : null;
+
+    if (!file) {
+        alert("Choose a document first.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    setDocumentStatus(`Uploading ${file.name}...`);
+
+    try {
+        const response = await fetch("/upload", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || "Document upload failed.");
+        }
+
+        setDocumentStatus(`Uploaded ${file.name}. Re-ingest documents to include it in answers.`);
+        input.value = "";
+    } catch (error) {
+        console.error(error);
+        setDocumentStatus(error.message || "Could not upload document.");
+    }
+}
+
+async function reingestDocuments() {
+    setDocumentStatus("Re-ingesting documents...");
+
+    try {
+        const response = await fetch("/ingest/documents", {
+            method: "POST"
+        });
+
+        if (!response.ok) {
+            throw new Error("Document re-ingest failed.");
+        }
+
+        const data = await response.json();
+        setDocumentStatus(`Indexed ${data.files_indexed || 0} file${data.files_indexed === 1 ? "" : "s"} and ${data.chunks_indexed || 0} chunk${data.chunks_indexed === 1 ? "" : "s"}.`);
+    } catch (error) {
+        console.error(error);
+        setDocumentStatus(error.message || "Could not re-ingest documents.");
+    }
+}
+
 function syncRfpAnswersFromDom() {
     document.querySelectorAll("[data-rfp-index]").forEach(element => {
         const index = Number(element.getAttribute("data-rfp-index"));
@@ -316,8 +492,17 @@ function wait(ms) {
     });
 }
 
+async function waitWhilePaused() {
+    while (rfpGenerationPaused) {
+        setGenerationUi("paused", "Answer generation paused");
+        setRfpStatus("Answer generation paused. Resume to continue.");
+        await wait(300);
+    }
+}
+
 async function waitWithCountdown(seconds, index, attempt) {
     for (let remaining = seconds; remaining > 0; remaining -= 1) {
+        await waitWhilePaused();
         rfpItems[index].status = `rate limited - retry in ${remaining}s`;
         renderRfpItems();
         setRfpStatus(`LLM rate limit reached. Retrying question ${index + 1} in ${remaining}s. Attempt ${attempt + 1} of 4.`);
@@ -369,49 +554,115 @@ async function answerRfpItem(index) {
 }
 
 async function generateRfpAnswers() {
+    if (activeGenerationPromise) {
+        return activeGenerationPromise;
+    }
+
     if (!rfpItems.length) {
         alert("Add at least one RFP question first.");
         return;
     }
 
+    rfpGenerationPaused = false;
+    activeGenerationPromise = runRfpAnswerGeneration()
+        .finally(() => {
+            activeGenerationPromise = null;
+        });
+
+    return activeGenerationPromise;
+}
+
+function pauseRfpGeneration() {
+    if (rfpGenerationState !== "running") {
+        return;
+    }
+
+    rfpGenerationPaused = true;
+    setGenerationUi("paused", "Answer generation paused");
+    setRfpStatus("Pause requested. The current answer will finish before processing stops.");
+}
+
+function resumeRfpGeneration() {
+    if (rfpGenerationState !== "paused") {
+        return;
+    }
+
+    rfpGenerationPaused = false;
+    setGenerationUi("running", "Generating answers");
+    setRfpStatus("Resuming answer generation...");
+}
+
+async function runRfpAnswerGeneration() {
     syncRfpAnswersFromDom();
-    setRfpStatus(`Generating answers: 0 of ${rfpItems.length} complete.`);
+    setRfpStatus(`Generating answers with ${RFP_GENERATION_BATCH_SIZE} queue slots: 0 of ${rfpItems.length} complete.`);
+    setGenerationUi("running", `Generating answers with ${RFP_GENERATION_BATCH_SIZE} queue slots`);
 
     let completed = 0;
     let failed = 0;
-    let nextDelay = 1000;
+    const pendingIndices = [];
+    let nextPendingIndex = 0;
+    let activeCount = 0;
 
-    for (let index = 0; index < rfpItems.length; index += 1) {
-        rfpItems[index].status = "generating";
-        rfpItems[index].error = "";
-        renderRfpItems();
+    rfpItems.forEach((item, index) => {
+        const hasAnswer = (item.answer || "").trim();
+        const canSkip = hasAnswer && !["failed", "pending"].includes(item.status);
 
-        try {
-            const data = await answerRfpItem(index);
-            rfpItems[index].answer = data.answer || "";
-            rfpItems[index].from_memory = Boolean(data.from_memory);
-            rfpItems[index].status = data.from_memory ? "answered from memory" : "answered";
-            rfpItems[index].error = "";
-            rfpItems[index].references = data.document_references || [];
+        if (canSkip) {
             completed += 1;
-            nextDelay = 1000;
-        } catch (error) {
-            console.error(error);
-            rfpItems[index].status = "failed";
-            rfpItems[index].error = error.message || "Answer generation failed.";
-            failed += 1;
-            nextDelay = 3000;
+        } else {
+            pendingIndices.push(index);
         }
+    });
 
-        renderRfpItems();
-        setRfpStatus(`Generating answers: ${completed + failed} of ${rfpItems.length} complete.`);
-        await wait(nextDelay);
+    async function runQueueSlot(slotNumber) {
+        while (nextPendingIndex < pendingIndices.length) {
+            await waitWhilePaused();
+
+            const queuePosition = nextPendingIndex;
+            nextPendingIndex += 1;
+
+            const index = pendingIndices[queuePosition];
+            activeCount += 1;
+            rfpItems[index].status = "generating";
+            rfpItems[index].error = "";
+            rfpItems[index].references = [];
+            renderRfpItems();
+            setRfpStatus(`Queue slot ${slotNumber} processing question ${index + 1}. ${completed + failed} of ${rfpItems.length} complete, ${activeCount} active.`);
+
+            try {
+                const data = await answerRfpItem(index);
+                rfpItems[index].answer = data.answer || "";
+                rfpItems[index].from_memory = Boolean(data.from_memory);
+                rfpItems[index].status = data.from_memory ? "answered from memory" : "answered";
+                rfpItems[index].error = "";
+                rfpItems[index].references = data.document_references || [];
+                completed += 1;
+            } catch (error) {
+                console.error(error);
+                rfpItems[index].status = "failed";
+                rfpItems[index].error = error.message || "Answer generation failed.";
+                rfpItems[index].references = [];
+                failed += 1;
+            }
+
+            activeCount -= 1;
+            renderRfpItems();
+            setRfpStatus(`Generating answers with ${RFP_GENERATION_BATCH_SIZE} queue slots: ${completed + failed} of ${rfpItems.length} complete, ${activeCount} active.`);
+
+            await wait(200);
+        }
     }
+
+    const workerCount = Math.min(RFP_GENERATION_BATCH_SIZE, pendingIndices.length);
+    await Promise.all(
+        Array.from({ length: workerCount }, (_, slotIndex) => runQueueSlot(slotIndex + 1))
+    );
 
     const message = failed
         ? `Generated ${completed} answer${completed === 1 ? "" : "s"}; ${failed} failed. You can retry or edit failed answers manually.`
         : `Generated ${completed} answer${completed === 1 ? "" : "s"}. You can edit them before exporting.`;
     setRfpStatus(message);
+    setGenerationUi("idle", "");
 }
 
 async function downloadRfpDocx() {

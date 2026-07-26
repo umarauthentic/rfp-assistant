@@ -7,7 +7,14 @@ from app.config import get_settings
 @lru_cache
 def get_embedding_model() -> SentenceTransformer:
     settings = get_settings()
-    return SentenceTransformer(settings.embedding_model)
+    try:
+        return SentenceTransformer(
+            settings.embedding_model,
+            device="cpu",
+            model_kwargs={"low_cpu_mem_usage": False},
+        )
+    except TypeError:
+        return SentenceTransformer(settings.embedding_model, device="cpu")
 
 
 def embed_texts(texts: list[str]) -> np.ndarray:

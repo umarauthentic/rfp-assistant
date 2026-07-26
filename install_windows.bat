@@ -133,7 +133,7 @@ if not exist ".env" (
     echo .env already exists.
 )
 
-set OLLAMA_MODEL=phi3:mini
+set OLLAMA_MODEL=llama3.2
 for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="OLLAMA_MODEL" set OLLAMA_MODEL=%%B
 )

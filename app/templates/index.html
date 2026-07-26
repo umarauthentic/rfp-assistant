@@ -6,20 +6,118 @@
 </head>
 <body>
 
-<div class="layout">
+<div class="app-shell">
+    <header class="app-header">
+        <div>
+            <div class="eyebrow">Response Agent</div>
+            <h1>RFP Assistant</h1>
+        </div>
+        <div class="header-status">
+            <span>Local RAG</span>
+            <span>Ollama</span>
+            <span>DOCX Export</span>
+        </div>
+    </header>
 
-    <main class="container">
-        <h1>RFP Builder</h1>
-
-        <section class="card rfp-builder">
-            <div class="section-header">
+    <main class="agent-grid">
+        <aside class="agent-panel intake-panel">
+            <div class="panel-heading">
+                <span class="step-badge">1</span>
                 <div>
-                    <h2>Vendor Response Builder</h2>
-                    <p>Add questions one by one, paste a full list, or upload a Word RFP template.</p>
+                    <h2>RFP Intake</h2>
+                    <p>Source, detection, and answer placement.</p>
                 </div>
-                <div class="template-actions">
+            </div>
+
+            <div class="control-group">
+                <label for="documentFile">Client RFP / source document</label>
+                <div class="file-row">
+                    <input type="file" id="documentFile" accept=".docx,.pptx,.xlsx,.txt,.md">
+                    <button type="button" onclick="uploadDocument()">Upload</button>
+                </div>
+                <button type="button" class="secondary full-width" onclick="reingestDocuments()">Re-ingest Knowledge Docs</button>
+                <div id="documentStatus" class="document-status"></div>
+            </div>
+
+            <div class="control-group">
+                <label for="rfpTemplateFile">Word response template</label>
+                <div class="file-row">
                     <input type="file" id="rfpTemplateFile" accept=".docx">
-                    <button onclick="uploadRfpTemplate()">Upload Template</button>
+                    <button type="button" onclick="uploadRfpTemplate()">Load</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="field-label">Question locations</div>
+                <div class="segmented-options">
+                    <label><input type="radio" name="questionDetectionMode" value="auto" checked onchange="updateDetectionMode()"> Auto</label>
+                    <label><input type="radio" name="questionDetectionMode" value="tables" onchange="updateDetectionMode()"> Tables</label>
+                    <label><input type="radio" name="questionDetectionMode" value="lists" onchange="updateDetectionMode()"> Lists</label>
+                    <label><input type="radio" name="questionDetectionMode" value="paragraphs" onchange="updateDetectionMode()"> Paragraphs</label>
+                    <label><input type="radio" name="questionDetectionMode" value="mixed" onchange="updateDetectionMode()"> Mixed</label>
+                </div>
+            </div>
+
+            <div id="tableDetectionFields" class="control-group compact-grid">
+                <label>
+                    Question column
+                    <input id="questionColumnHint" type="text" placeholder="Auto, heading, A, 1">
+                </label>
+                <label>
+                    Answer column
+                    <input id="answerColumnHint" type="text" placeholder="Auto, heading, B, 2">
+                </label>
+                <label>
+                    Sheet / table
+                    <input id="sheetTableHint" type="text" placeholder="All">
+                </label>
+                <label>
+                    Missing answer column
+                    <select id="missingAnswerColumnMode">
+                        <option value="create">Create response column</option>
+                        <option value="next-empty">Use next empty column</option>
+                        <option value="append">Append response section</option>
+                    </select>
+                </label>
+            </div>
+
+            <div id="textDetectionFields" class="control-group compact-grid">
+                <label>
+                    Question keywords
+                    <input id="questionKeywordHint" type="text" value="Describe, Provide, Explain, Confirm, Detail">
+                </label>
+                <label>
+                    Answer placement
+                    <select id="answerPlacementMode">
+                        <option value="after-question">After each question</option>
+                        <option value="new-paragraph">New paragraph below</option>
+                        <option value="append-section">Append response section</option>
+                    </select>
+                </label>
+                <label>
+                    Answer prefix
+                    <input id="answerPrefix" type="text" value="ANSWER:">
+                </label>
+                <label>
+                    Review threshold
+                    <select id="reviewThreshold">
+                        <option value="balanced">Balanced</option>
+                        <option value="strict">Strict</option>
+                        <option value="broad">Broad</option>
+                    </select>
+                </label>
+            </div>
+
+            <button type="button" class="full-width" onclick="applyDetectionSettings()">Apply Detection Setup</button>
+            <div id="detectionSummary" class="setup-summary"></div>
+        </aside>
+
+        <section class="agent-panel work-panel">
+            <div class="panel-heading work-heading">
+                <span class="step-badge">2</span>
+                <div>
+                    <h2>Question Review & Answers</h2>
+                    <p>Confirm questions, generate answers, then export.</p>
                 </div>
             </div>
 
@@ -27,27 +125,32 @@
                 <div>
                     <label for="rfpSingleQuestion">One question</label>
                     <textarea id="rfpSingleQuestion" placeholder="Enter one RFP question..."></textarea>
-                    <button onclick="addRfpQuestion()">Add Question</button>
+                    <button type="button" onclick="addRfpQuestion()">Add Question</button>
                 </div>
 
                 <div>
                     <label for="rfpQuestionList">Question list</label>
                     <textarea id="rfpQuestionList" placeholder="Paste one question per line, or use numbered/bulleted lines..."></textarea>
-                    <button onclick="addRfpQuestionList()">Add List</button>
+                    <button type="button" onclick="addRfpQuestionList()">Add List</button>
                 </div>
             </div>
 
-            <div class="buttons">
-                <button onclick="generateRfpAnswers()">Generate Answers</button>
-                <button onclick="downloadRfpDocx()">Generate DOCX</button>
-                <button class="secondary" onclick="clearRfpBuilder()">Clear</button>
+            <div class="action-bar">
+                <button id="generateAnswersButton" type="button" onclick="generateRfpAnswers()">Generate Answers</button>
+                <button id="pauseAnswersButton" type="button" class="secondary hidden" onclick="pauseRfpGeneration()">Pause</button>
+                <button id="resumeAnswersButton" type="button" class="secondary hidden" onclick="resumeRfpGeneration()">Resume</button>
+                <button type="button" onclick="downloadRfpDocx()">Generate DOCX</button>
+                <button type="button" class="secondary" onclick="clearRfpBuilder()">Clear</button>
             </div>
 
+            <div id="generationIndicator" class="generation-indicator hidden" aria-live="polite">
+                <span class="generation-pulse"></span>
+                <span id="generationIndicatorText">Generating answers</span>
+            </div>
             <div id="rfpStatus" class="builder-status"></div>
             <div id="rfpItems" class="rfp-items"></div>
         </section>
     </main>
-
 </div>
 
 <script src="/static/app.js"></script>

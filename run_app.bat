@@ -19,7 +19,17 @@ timeout /t 3 /nobreak >nul
 
 call ".venv\Scripts\activate.bat"
 
+if exist ".env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+        if /i "%%A"=="APP_HOST" if not defined APP_HOST set "APP_HOST=%%B"
+        if /i "%%A"=="APP_PORT" if not defined APP_PORT set "APP_PORT=%%B"
+    )
+)
+
+if not defined APP_HOST set "APP_HOST=0.0.0.0"
+if not defined APP_PORT set "APP_PORT=8001"
+
 echo Starting RFP Assistant...
-echo Open http://127.0.0.1:8001 in your browser.
-start "" "http://127.0.0.1:8001"
-uvicorn app.main:app --host 127.0.0.1 --port 8001
+echo Open http://localhost:%APP_PORT% in your browser.
+start "" "http://localhost:%APP_PORT%"
+uvicorn app.main:app --host %APP_HOST% --port %APP_PORT%
