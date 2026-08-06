@@ -3,17 +3,21 @@ import shutil
 import re
 import base64
 import secrets
+import hmac
+import hashlib
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import requests
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from docx import Document
+from openpyxl import load_workbook
 
 from app.config import get_settings
 from app.ingestion.loaders import iter_supported_files, load_file, SUPPORTED_EXTENSIONS
@@ -29,8 +33,10 @@ load_dotenv()
 
 settings = get_settings()
 DEFAULT_RFP_TEMPLATE_PATH = Path("app/templates/AORN LMS Evaluation.docx")
-UPLOADED_RFP_TEMPLATE_PATH = Path(settings.data_dir) / "rfp_templates" / "uploaded-rfp-template.docx"
+UPLOADED_RFP_TEMPLATE_DIR = Path(settings.data_dir) / "rfp_templates"
+UPLOADED_RFP_TEMPLATE_STEM = "uploaded-rfp-template"
 GENERATED_RFP_DIR = Path(settings.data_dir) / "generated_rfps"
+SUPPORTED_RFP_TEMPLATE_EXTENSIONS = {".docx", ".xlsx", ".xlsm"}
 
 app = FastAPI(title=settings.app_name)
 
@@ -44,6 +50,8 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+SESSION_COOKIE_NAME = "rfp_assistant_session"
+SESSION_MAX_AGE_SECONDS = 60 * 60 * 12
 
 
 class RfpQuestionItem(BaseModel):
@@ -68,7 +76,42 @@ class RfpBuildRequest(BaseModel):
     title: str = Field(default="Generated RFP Response", max_length=200)
 
 
-def _is_authorized(request: Request) -> bool:
+def _auth_secret() -> str:
+    return f"{settings.app_username}:{settings.app_password or ''}"
+
+
+def _sign_session(username: str, issued_at: int) -> str:
+    payload = f"{username}:{issued_at}"
+    signature = hmac.new(
+        _auth_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload}:{signature}"
+
+
+def _is_valid_session(token: str | None) -> bool:
+    if not token or not settings.app_password:
+        return False
+
+    username, _, rest = token.partition(":")
+    issued_at_value, _, signature = rest.partition(":")
+    if not username or not issued_at_value or not signature:
+        return False
+
+    try:
+        issued_at = int(issued_at_value)
+    except ValueError:
+        return False
+
+    if int(time.time()) - issued_at > SESSION_MAX_AGE_SECONDS:
+        return False
+
+    expected = _sign_session(username, issued_at)
+    return secrets.compare_digest(token, expected) and secrets.compare_digest(username, settings.app_username)
+
+
+def _is_basic_authorized(request: Request) -> bool:
     if not settings.app_password:
         return True
 
@@ -82,14 +125,112 @@ def _is_authorized(request: Request) -> bool:
     except Exception:
         return False
 
-    _, _, password = decoded.partition(":")
-    return secrets.compare_digest(password, settings.app_password)
+    username, _, password = decoded.partition(":")
+    return (
+        secrets.compare_digest(username, settings.app_username)
+        and secrets.compare_digest(password, settings.app_password)
+    )
+
+
+def _is_authorized(request: Request) -> bool:
+    if not settings.app_password:
+        return True
+
+    return _is_valid_session(request.cookies.get(SESSION_COOKIE_NAME)) or _is_basic_authorized(request)
+
+
+def _login_page(error: str = "") -> HTMLResponse:
+    error_html = f'<div class="error">{error}</div>' if error else ""
+    return HTMLResponse(f"""<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RFP Assistant Login</title>
+    <style>
+        body {{
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #f5f7fb;
+            color: #172033;
+            font-family: Arial, sans-serif;
+        }}
+        main {{
+            width: min(380px, calc(100vw - 32px));
+            background: #ffffff;
+            border: 1px solid #d8deea;
+            border-radius: 8px;
+            padding: 28px;
+            box-shadow: 0 16px 40px rgba(23, 32, 51, 0.12);
+        }}
+        h1 {{
+            margin: 0 0 20px;
+            font-size: 24px;
+            line-height: 1.2;
+        }}
+        label {{
+            display: block;
+            margin: 14px 0 6px;
+            font-size: 14px;
+            font-weight: 700;
+        }}
+        input {{
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #b8c2d6;
+            border-radius: 6px;
+            padding: 11px 12px;
+            font-size: 16px;
+        }}
+        button {{
+            width: 100%;
+            margin-top: 20px;
+            border: 0;
+            border-radius: 6px;
+            background: #2557d6;
+            color: #ffffff;
+            padding: 12px 14px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+        }}
+        .error {{
+            margin-bottom: 14px;
+            border: 1px solid #f1a6a6;
+            border-radius: 6px;
+            background: #fff1f1;
+            color: #9d1c1c;
+            padding: 10px 12px;
+            font-size: 14px;
+        }}
+    </style>
+</head>
+<body>
+    <main>
+        <h1>RFP Assistant</h1>
+        {error_html}
+        <form method="post" action="/login">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" required>
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+            <button type="submit">Sign in</button>
+        </form>
+    </main>
+</body>
+</html>""")
 
 
 @app.middleware("http")
 async def require_app_password(request: Request, call_next):
-    if request.url.path == "/health" or _is_authorized(request):
+    public_paths = {"/health", "/login"}
+    if request.url.path in public_paths or _is_authorized(request):
         return await call_next(request)
+
+    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(url="/login", status_code=303)
 
     return Response(
         status_code=401,
@@ -102,7 +243,12 @@ def _normalize_match_text(value: str) -> str:
 
 
 def _get_rfp_template_path() -> Path:
-    return UPLOADED_RFP_TEMPLATE_PATH if UPLOADED_RFP_TEMPLATE_PATH.exists() else DEFAULT_RFP_TEMPLATE_PATH
+    for suffix in SUPPORTED_RFP_TEMPLATE_EXTENSIONS:
+        candidate = UPLOADED_RFP_TEMPLATE_DIR / f"{UPLOADED_RFP_TEMPLATE_STEM}{suffix}"
+        if candidate.exists():
+            return candidate
+
+    return DEFAULT_RFP_TEMPLATE_PATH
 
 
 class RateLimitError(Exception):
@@ -163,8 +309,41 @@ def _document_references(response: QueryResponse) -> list[dict[str, str | float 
     return references
 
 
-def _extract_template_questions() -> list[str]:
-    template_path = _get_rfp_template_path()
+def _clean_cell_text(value) -> str:
+    if value is None:
+        return ""
+
+    return str(value).replace("\r", "\n").strip()
+
+
+def _looks_like_question(value: str) -> bool:
+    text = " ".join(value.split())
+    if len(text) < 8:
+        return False
+
+    lowered = text.lower()
+    if lowered in {"question", "questions", "requirement", "requirements", "prompt", "prompts"}:
+        return False
+
+    starts = (
+        "describe", "provide", "explain", "confirm", "detail", "list", "identify",
+        "state", "does", "do ", "is ", "are ", "will ", "can ", "what ", "how ",
+        "when ", "where ", "why ", "please ",
+    )
+    return "?" in text or lowered.startswith(starts)
+
+
+def _append_unique_question(questions: list[str], seen: set[str], question: str) -> None:
+    cleaned = " ".join(question.split()).strip()
+    key = _normalize_match_text(cleaned)
+    if len(key) < 8 or key in seen:
+        return
+
+    seen.add(key)
+    questions.append(cleaned)
+
+
+def _extract_docx_template_questions(template_path: Path) -> list[str]:
     if not template_path.exists():
         return []
 
@@ -206,6 +385,58 @@ def _extract_template_questions() -> list[str]:
             questions.append(question)
 
     return questions
+
+
+def _extract_excel_template_questions(template_path: Path) -> list[str]:
+    workbook = load_workbook(template_path, read_only=True, data_only=True)
+    questions: list[str] = []
+    seen: set[str] = set()
+    header_markers = ("question", "requirement", "prompt")
+
+    for sheet in workbook.worksheets:
+        question_columns: set[int] = set()
+
+        for row in sheet.iter_rows(values_only=True):
+            values = [_clean_cell_text(value) for value in row]
+            non_empty_values = [value for value in values if value]
+            if not non_empty_values:
+                continue
+
+            header_columns = {
+                index
+                for index, value in enumerate(values)
+                if any(marker in value.lower() for marker in header_markers)
+            }
+            if header_columns:
+                question_columns.update(header_columns)
+                continue
+
+            for index in sorted(question_columns):
+                if index < len(values) and values[index]:
+                    candidate = values[index]
+                    if _looks_like_question(candidate) or len(_normalize_match_text(candidate)) >= 20:
+                        _append_unique_question(questions, seen, candidate)
+
+            for value in non_empty_values:
+                if _looks_like_question(value):
+                    _append_unique_question(questions, seen, value)
+
+    workbook.close()
+    return questions
+
+
+def _extract_template_questions() -> list[str]:
+    template_path = _get_rfp_template_path()
+    if not template_path.exists():
+        return []
+
+    suffix = template_path.suffix.lower()
+    if suffix == ".docx":
+        return _extract_docx_template_questions(template_path)
+    if suffix in {".xlsx", ".xlsm"}:
+        return _extract_excel_template_questions(template_path)
+
+    return []
 
 
 def _fill_template_response_cells(doc: Document, answers_by_question: dict[str, str]) -> set[str]:
@@ -288,6 +519,42 @@ def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_form():
+    if not settings.app_password:
+        return RedirectResponse(url="/", status_code=303)
+
+    return _login_page()
+
+
+@app.post("/login")
+def login(username: str = Form(...), password: str = Form(...)):
+    if not settings.app_password:
+        return RedirectResponse(url="/", status_code=303)
+
+    username_ok = secrets.compare_digest(username, settings.app_username)
+    password_ok = secrets.compare_digest(password, settings.app_password)
+    if not username_ok or not password_ok:
+        return _login_page("Invalid username or password.")
+
+    response = RedirectResponse(url="/", status_code=303)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=_sign_session(settings.app_username, int(time.time())),
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/logout")
+def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return response
+
+
 @app.get("/health")
 def health():
     llm_model = settings.ollama_model
@@ -333,18 +600,22 @@ def upload_rfp_template(file: UploadFile = File(...)):
     if not filename:
         raise HTTPException(status_code=400, detail="Filename is required")
 
-    if suffix != ".docx":
-        raise HTTPException(status_code=400, detail="RFP template must be a .docx file")
+    if suffix not in SUPPORTED_RFP_TEMPLATE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="RFP template must be a .docx, .xlsx, or .xlsm file")
 
-    UPLOADED_RFP_TEMPLATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    UPLOADED_RFP_TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+    for existing in UPLOADED_RFP_TEMPLATE_DIR.glob(f"{UPLOADED_RFP_TEMPLATE_STEM}.*"):
+        existing.unlink()
 
-    with UPLOADED_RFP_TEMPLATE_PATH.open("wb") as buffer:
+    uploaded_template_path = UPLOADED_RFP_TEMPLATE_DIR / f"{UPLOADED_RFP_TEMPLATE_STEM}{suffix}"
+
+    with uploaded_template_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     return {
         "success": True,
         "filename": filename,
-        "template": UPLOADED_RFP_TEMPLATE_PATH.name,
+        "template": uploaded_template_path.name,
         "questions": _extract_template_questions(),
     }
 
@@ -487,7 +758,8 @@ def answer_one_rfp_question(request: RfpSingleAnswerRequest):
 
 @app.post("/rfp/generate")
 def generate_rfp_document(request: RfpBuildRequest):
-    template_path = _get_rfp_template_path()
+    selected_template_path = _get_rfp_template_path()
+    template_path = selected_template_path if selected_template_path.suffix.lower() == ".docx" else DEFAULT_RFP_TEMPLATE_PATH
     if not template_path.exists():
         raise HTTPException(status_code=404, detail="RFP template not found")
 

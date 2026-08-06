@@ -107,7 +107,7 @@ if errorlevel 1 (
     echo pip is already available in the virtual environment.
 )
 
-python -m pip show fastapi uvicorn python-dotenv pydantic pydantic-settings sentence-transformers faiss-cpu numpy requests python-docx python-pptx openpyxl pandas python-multipart >nul 2>nul
+python -m pip show fastapi uvicorn python-dotenv pydantic pydantic-settings sentence-transformers faiss-cpu numpy requests python-docx python-pptx openpyxl pandas python-multipart ngrok >nul 2>nul
 if errorlevel 1 (
     echo One or more Python dependencies are missing. Installing from requirements.txt...
     python -m pip install --upgrade pip
@@ -171,7 +171,8 @@ if errorlevel 1 (
 echo.
 echo Setup complete.
 echo Start the web app with run_app.bat
-echo Then open http://127.0.0.1:8001
+echo Then open http://localhost:8001
+echo For remote access, configure ngrok and run run_ngrok.bat
 echo.
 pause
 exit /b 0

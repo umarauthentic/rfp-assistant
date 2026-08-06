@@ -13,6 +13,7 @@
             <h1>RFP Assistant</h1>
         </div>
         <div class="header-status">
+            <button id="tutorialButton" type="button" class="secondary tutorial-button" onclick="startTutorial()">Tutorial</button>
             <span>Local RAG</span>
             <span>Ollama</span>
             <span>DOCX Export</span>
@@ -32,18 +33,18 @@
             <div class="control-group">
                 <label for="documentFile">Client RFP / source document</label>
                 <div class="file-row">
-                    <input type="file" id="documentFile" accept=".docx,.pptx,.xlsx,.txt,.md">
-                    <button type="button" onclick="uploadDocument()">Upload</button>
+                    <input type="file" id="documentFile" accept=".docx,.pdf,.pptx,.xlsx,.txt,.md">
+                    <button id="uploadDocumentButton" type="button" onclick="uploadDocument()">Upload</button>
                 </div>
-                <button type="button" class="secondary full-width" onclick="reingestDocuments()">Re-ingest Knowledge Docs</button>
+                <button id="reingestButton" type="button" class="secondary full-width" onclick="reingestDocuments()">Re-ingest Knowledge Docs</button>
                 <div id="documentStatus" class="document-status"></div>
             </div>
 
             <div class="control-group">
-                <label for="rfpTemplateFile">Word response template</label>
+                <label for="rfpTemplateFile">Question template / workbook</label>
                 <div class="file-row">
-                    <input type="file" id="rfpTemplateFile" accept=".docx">
-                    <button type="button" onclick="uploadRfpTemplate()">Load</button>
+                    <input type="file" id="rfpTemplateFile" accept=".docx,.xlsx,.xlsm">
+                    <button id="loadTemplateButton" type="button" onclick="uploadRfpTemplate()">Load</button>
                 </div>
             </div>
 
@@ -108,7 +109,7 @@
                 </label>
             </div>
 
-            <button type="button" class="full-width" onclick="applyDetectionSettings()">Apply Detection Setup</button>
+            <button id="applyDetectionButton" type="button" class="full-width" onclick="applyDetectionSettings()">Apply Detection Setup</button>
             <div id="detectionSummary" class="setup-summary"></div>
         </aside>
 
@@ -125,13 +126,13 @@
                 <div>
                     <label for="rfpSingleQuestion">One question</label>
                     <textarea id="rfpSingleQuestion" placeholder="Enter one RFP question..."></textarea>
-                    <button type="button" onclick="addRfpQuestion()">Add Question</button>
+                    <button id="addQuestionButton" type="button" onclick="addRfpQuestion()">Add Question</button>
                 </div>
 
                 <div>
                     <label for="rfpQuestionList">Question list</label>
                     <textarea id="rfpQuestionList" placeholder="Paste one question per line, or use numbered/bulleted lines..."></textarea>
-                    <button type="button" onclick="addRfpQuestionList()">Add List</button>
+                    <button id="addQuestionListButton" type="button" onclick="addRfpQuestionList()">Add List</button>
                 </div>
             </div>
 
@@ -139,8 +140,8 @@
                 <button id="generateAnswersButton" type="button" onclick="generateRfpAnswers()">Generate Answers</button>
                 <button id="pauseAnswersButton" type="button" class="secondary hidden" onclick="pauseRfpGeneration()">Pause</button>
                 <button id="resumeAnswersButton" type="button" class="secondary hidden" onclick="resumeRfpGeneration()">Resume</button>
-                <button type="button" onclick="downloadRfpDocx()">Generate DOCX</button>
-                <button type="button" class="secondary" onclick="clearRfpBuilder()">Clear</button>
+                <button id="generateDocxButton" type="button" onclick="downloadRfpDocx()">Generate DOCX</button>
+                <button id="clearBuilderButton" type="button" class="secondary" onclick="clearRfpBuilder()">Clear</button>
             </div>
 
             <div id="generationIndicator" class="generation-indicator hidden" aria-live="polite">

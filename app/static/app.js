@@ -8,6 +8,60 @@ let rfpGenerationState = "idle";
 let rfpGenerationPaused = false;
 let activeGenerationPromise = null;
 const RFP_GENERATION_BATCH_SIZE = 5;
+let tutorialStepIndex = 0;
+
+const tutorialSteps = [
+    {
+        selector: ".intake-panel",
+        title: "Start With Knowledge Sources",
+        body: "Use this side panel to upload supporting files, re-ingest the knowledge base, load RFP question templates, and choose how questions should be detected."
+    },
+    {
+        selector: "#documentFile",
+        title: "Upload Source Documents",
+        body: "Choose a supported source file such as DOCX, PDF, PPTX, XLSX, TXT, or MD. After upload, re-ingest so the assistant can search the new content."
+    },
+    {
+        selector: "#reingestButton",
+        title: "Re-Ingest Knowledge Docs",
+        body: "This rebuilds the searchable FAISS document index from files in data/documents. Run it whenever new files are added."
+    },
+    {
+        selector: "#rfpTemplateFile",
+        title: "Load A Question Template",
+        body: "Upload a DOCX, XLSX, or XLSM RFP template. The app detects questions and adds them to the review queue."
+    },
+    {
+        selector: "#applyDetectionButton",
+        title: "Confirm Detection Settings",
+        body: "Set how questions and answer placement should be detected before loading or reviewing a template."
+    },
+    {
+        selector: "#rfpSingleQuestion",
+        title: "Add One Question",
+        body: "Paste a single RFP question here when you want to test or answer one item manually."
+    },
+    {
+        selector: "#rfpQuestionList",
+        title: "Add A Question List",
+        body: "Paste multiple questions, one per line. Numbered and bulleted lists are cleaned up automatically."
+    },
+    {
+        selector: "#generateAnswersButton",
+        title: "Generate Answers",
+        body: "The app searches approved memory and indexed documents, sends the best context to Ollama, and writes draft answers into the queue."
+    },
+    {
+        selector: "#rfpItems",
+        title: "Review And Edit",
+        body: "Generated answers appear here with source references. Review, edit, and remove items before export."
+    },
+    {
+        selector: "#generateDocxButton",
+        title: "Export The Response",
+        body: "When answers are ready, generate a DOCX response file from the reviewed questions and answers."
+    }
+];
 
 document.addEventListener("DOMContentLoaded", function () {
     if (document.getElementById("memoryList")) {
@@ -15,6 +69,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     updateDetectionMode();
+    createTutorialElements();
 
     const textarea = document.getElementById("query");
     if (!textarea) {
@@ -33,6 +88,164 @@ document.addEventListener("DOMContentLoaded", function () {
         this.style.height = this.scrollHeight + "px";
     });
 });
+
+function createTutorialElements() {
+    if (document.getElementById("tutorialOverlay")) {
+        return;
+    }
+
+    const overlay = document.createElement("div");
+    overlay.id = "tutorialOverlay";
+    overlay.className = "tutorial-overlay hidden";
+    overlay.onclick = endTutorial;
+
+    const highlight = document.createElement("div");
+    highlight.id = "tutorialHighlight";
+    highlight.className = "tutorial-highlight hidden";
+
+    const popover = document.createElement("section");
+    popover.id = "tutorialPopover";
+    popover.className = "tutorial-popover hidden";
+    popover.setAttribute("role", "dialog");
+    popover.setAttribute("aria-modal", "true");
+    popover.setAttribute("aria-labelledby", "tutorialTitle");
+    popover.innerHTML = `
+        <div class="tutorial-progress" id="tutorialProgress"></div>
+        <h3 id="tutorialTitle"></h3>
+        <p id="tutorialBody"></p>
+        <div class="tutorial-actions">
+            <button id="tutorialBackButton" type="button" class="secondary" onclick="previousTutorialStep()">Back</button>
+            <button id="tutorialSkipButton" type="button" class="secondary" onclick="endTutorial()">Close</button>
+            <button id="tutorialNextButton" type="button" onclick="nextTutorialStep()">Next</button>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(highlight);
+    document.body.appendChild(popover);
+
+    document.addEventListener("keydown", function (event) {
+        if (document.getElementById("tutorialPopover")?.classList.contains("hidden")) {
+            return;
+        }
+
+        if (event.key === "Escape") {
+            endTutorial();
+        }
+
+        if (event.key === "ArrowRight") {
+            nextTutorialStep();
+        }
+
+        if (event.key === "ArrowLeft") {
+            previousTutorialStep();
+        }
+    });
+}
+
+function startTutorial() {
+    createTutorialElements();
+    tutorialStepIndex = 0;
+    showTutorialStep();
+}
+
+function nextTutorialStep() {
+    if (tutorialStepIndex >= tutorialSteps.length - 1) {
+        endTutorial();
+        return;
+    }
+
+    tutorialStepIndex += 1;
+    showTutorialStep();
+}
+
+function previousTutorialStep() {
+    if (tutorialStepIndex <= 0) {
+        return;
+    }
+
+    tutorialStepIndex -= 1;
+    showTutorialStep();
+}
+
+function endTutorial() {
+    document.getElementById("tutorialOverlay")?.classList.add("hidden");
+    document.getElementById("tutorialHighlight")?.classList.add("hidden");
+    document.getElementById("tutorialPopover")?.classList.add("hidden");
+    document.querySelector(".tutorial-target")?.classList.remove("tutorial-target");
+}
+
+function showTutorialStep() {
+    const step = tutorialSteps[tutorialStepIndex];
+    const target = document.querySelector(step.selector);
+    const overlay = document.getElementById("tutorialOverlay");
+    const highlight = document.getElementById("tutorialHighlight");
+    const popover = document.getElementById("tutorialPopover");
+
+    if (!target || !overlay || !highlight || !popover) {
+        return;
+    }
+
+    document.querySelector(".tutorial-target")?.classList.remove("tutorial-target");
+    target.classList.add("tutorial-target");
+    target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+
+    window.setTimeout(function () {
+        const rect = target.getBoundingClientRect();
+        const padding = 8;
+        const viewportPadding = 16;
+
+        overlay.classList.remove("hidden");
+        highlight.classList.remove("hidden");
+        popover.classList.remove("hidden");
+
+        highlight.style.left = `${Math.max(viewportPadding, rect.left - padding)}px`;
+        highlight.style.top = `${Math.max(viewportPadding, rect.top - padding)}px`;
+        highlight.style.width = `${Math.min(window.innerWidth - viewportPadding * 2, rect.width + padding * 2)}px`;
+        highlight.style.height = `${rect.height + padding * 2}px`;
+
+        document.getElementById("tutorialProgress").textContent = `Step ${tutorialStepIndex + 1} of ${tutorialSteps.length}`;
+        document.getElementById("tutorialTitle").textContent = step.title;
+        document.getElementById("tutorialBody").textContent = step.body;
+
+        const backButton = document.getElementById("tutorialBackButton");
+        const nextButton = document.getElementById("tutorialNextButton");
+        if (backButton) {
+            backButton.disabled = tutorialStepIndex === 0;
+        }
+        if (nextButton) {
+            nextButton.textContent = tutorialStepIndex === tutorialSteps.length - 1 ? "Finish" : "Next";
+        }
+
+        positionTutorialPopover(rect, popover);
+    }, 280);
+}
+
+function positionTutorialPopover(rect, popover) {
+    const viewportPadding = 16;
+    const popoverWidth = Math.min(420, window.innerWidth - viewportPadding * 2);
+    popover.style.width = `${popoverWidth}px`;
+
+    let left = rect.right + 18;
+    if (left + popoverWidth > window.innerWidth - viewportPadding) {
+        left = rect.left - popoverWidth - 18;
+    }
+    if (left < viewportPadding) {
+        left = Math.min(window.innerWidth - popoverWidth - viewportPadding, viewportPadding);
+    }
+
+    let top = rect.top;
+    const popoverHeight = popover.offsetHeight || 260;
+    if (top + popoverHeight > window.innerHeight - viewportPadding) {
+        top = window.innerHeight - popoverHeight - viewportPadding;
+    }
+    if (top < viewportPadding) {
+        top = viewportPadding;
+    }
+
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+}
 
 function escapeHtml(value) {
     if (!value) return "";
@@ -397,7 +610,7 @@ async function uploadRfpTemplate() {
     const file = input && input.files ? input.files[0] : null;
 
     if (!file) {
-        alert("Choose a .docx RFP template first.");
+        alert("Choose a .docx, .xlsx, or .xlsm question template first.");
         return;
     }
 
@@ -412,7 +625,8 @@ async function uploadRfpTemplate() {
         });
 
         if (!response.ok) {
-            throw new Error("Template upload failed.");
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || "Template upload failed.");
         }
 
         const data = await response.json();
@@ -421,7 +635,7 @@ async function uploadRfpTemplate() {
         input.value = "";
     } catch (error) {
         console.error(error);
-        setRfpStatus("Could not upload RFP template.");
+        setRfpStatus(error.message || "Could not upload RFP template.");
     }
 }
 

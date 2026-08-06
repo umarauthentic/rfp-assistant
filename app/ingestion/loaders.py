@@ -2,9 +2,10 @@ from pathlib import Path
 from typing import Iterable
 import pandas as pd
 from docx import Document
+from pypdf import PdfReader
 from pptx import Presentation
 
-SUPPORTED_EXTENSIONS = {".docx", ".pptx", ".xlsx", ".txt", ".md"}
+SUPPORTED_EXTENSIONS = {".docx", ".pdf", ".pptx", ".xlsx", ".txt", ".md"}
 
 
 def load_docx(path: Path) -> list[str]:
@@ -35,6 +36,16 @@ def load_pptx(path: Path) -> list[str]:
     return parts
 
 
+def load_pdf(path: Path) -> list[str]:
+    parts = []
+    reader = PdfReader(str(path))
+    for idx, page in enumerate(reader.pages, start=1):
+        text = (page.extract_text() or "").strip()
+        if text:
+            parts.append(f"Page {idx}: {text}")
+    return parts
+
+
 def load_xlsx(path: Path) -> list[str]:
     parts = []
     excel = pd.ExcelFile(path)
@@ -62,6 +73,8 @@ def load_file(path: Path) -> list[str]:
     suffix = path.suffix.lower()
     if suffix == ".docx":
         return load_docx(path)
+    if suffix == ".pdf":
+        return load_pdf(path)
     if suffix == ".pptx":
         return load_pptx(path)
     if suffix == ".xlsx":

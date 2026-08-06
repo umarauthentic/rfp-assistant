@@ -4,11 +4,11 @@ A local-first RFP response builder for generating vendor answers from historical
 
 ## What It Does
 
-- Upload or load an RFP question template in `.docx` format.
+- Upload or load RFP questions from Word `.docx` templates or Excel `.xlsx` / `.xlsm` workbooks.
 - Add RFP questions one by one or paste a question list.
 - Generate answers from local indexed documents.
 - Show source document references for generated answers.
-- Export answers into the Word RFP template.
+- Export answers into a Word `.docx` response document.
 - Store and search historical approved answers.
 - Runs locally on Windows with FastAPI, FAISS, Sentence Transformers, and Ollama.
 
@@ -104,9 +104,10 @@ TOP_K_DOCS=8
 MIN_DOC_SCORE=0.15
 ```
 
-`APP_PASSWORD` is optional. Leave it empty for local-only use. Set it before sharing the app through a tunnel so the browser prompts for a password:
+`APP_PASSWORD` is optional. Leave it empty for local-only use. Set it before sharing the app through a tunnel so the browser shows a login form:
 
 ```env
+APP_USERNAME=rfp
 APP_PASSWORD=replace-with-a-long-random-password
 ```
 
@@ -150,38 +151,85 @@ The FastAPI health check is available at:
 http://localhost:8001/health
 ```
 
-## Remote Access With Cloudflare Tunnel
+## Remote Access With ngrok
 
 Do not expose Ollama directly. Keep `OLLAMA_BASE_URL=http://localhost:11434` and expose only the application port, which defaults to `8001`.
 
-For a temporary development tunnel, install `cloudflared`, start the app, then run:
+Install dependencies with `install_windows.bat`. The project uses the official ngrok Python SDK from `requirements.txt`.
+
+Configure your ngrok account token on this PC. If the ngrok CLI is available, use:
 
 ```bat
-cloudflared tunnel --url http://localhost:8001
+ngrok config add-authtoken YOUR_NGROK_AUTHTOKEN
 ```
 
-Cloudflare will print a temporary HTTPS URL like:
+If the CLI is not available, set `NGROK_AUTHTOKEN` in your terminal before starting the tunnel. Do not add the token to `.env` or commit it.
+
+Start the RFP Assistant in one terminal:
+
+```bat
+run_app.bat
+```
+
+For a temporary development URL, start ngrok in a second terminal:
+
+```bat
+run_ngrok.bat
+```
+
+This runs:
+
+```bat
+python scripts\run_ngrok.py
+```
+
+ngrok will print a forwarding URL like:
 
 ```text
-https://<random-name>.trycloudflare.com
+https://<random-id>.ngrok-free.app
 ```
 
 Use that URL to reach the RFP Assistant remotely while the tunnel is running.
+
+For a fixed URL, reserve or configure the domain in ngrok first, then set it in `.env`:
+
+```env
+NGROK_DOMAIN=rfp-agent.authenticlearninglabs.com
+```
+
+For an ngrok-managed fixed URL such as `rfp-assistant.ngrok-free.dev`, that exact domain must be available and reserved in your ngrok dashboard before `run_ngrok.bat` can use it:
+
+```env
+NGROK_DOMAIN=rfp-assistant.ngrok-free.dev
+```
+
+Then run:
+
+```bat
+run_ngrok.bat
+```
+
+That runs:
+
+```bat
+python scripts\run_ngrok.py
+```
 
 Important limitations:
 
 - The computer must remain powered on.
 - Ollama must remain running.
 - The RFP Assistant application must remain running.
-- Temporary tunnel URLs can change after restarting `cloudflared`.
-- Use a named Cloudflare Tunnel for a stable domain.
-- Enable authentication before sharing the application publicly. At minimum, set `APP_PASSWORD` in `.env`; for broader access, put Cloudflare Access in front of the named tunnel.
-- Never commit `.env`, tunnel credentials, API keys, passwords, or Cloudflare credential files.
+- Temporary ngrok URLs can change after restarting `ngrok`.
+- Use a reserved ngrok domain for a stable URL.
+- Enable authentication before sharing the application publicly. At minimum, set `APP_PASSWORD` in `.env`; for broader access, configure ngrok OAuth or another access policy in ngrok.
+- Never commit `.env`, ngrok auth tokens, API keys, passwords, or ngrok credential files.
 
 ## Project Scripts
 
 - `install_windows.bat` - first-time Windows setup.
 - `run_app.bat` - starts Ollama and the FastAPI web app.
+- `run_ngrok.bat` - starts an ngrok tunnel to the FastAPI web app.
 - `reingest_documents.bat` - rebuilds the document vector index.
 - `setup_windows.bat` - older basic setup script.
 - `run_local.bat` - older local development run script.

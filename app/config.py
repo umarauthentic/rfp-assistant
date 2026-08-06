@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     env: str = Field(default="local", alias="ENV")
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
     app_port: int = Field(default=8001, alias="APP_PORT")
+    app_username: str = Field(default="rfp", alias="APP_USERNAME")
     app_password: str | None = Field(default=None, alias="APP_PASSWORD")
 
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
