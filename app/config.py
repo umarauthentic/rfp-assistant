@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         return Path(self.data_dir) / "qa_memory"
 
     @property
+    def chat_history_dir(self) -> Path:
+        return Path(self.data_dir) / "chat_history"
+
+    @property
     def vector_path(self) -> Path:
         return Path(self.vector_dir)
 
@@ -51,5 +55,6 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.documents_dir.mkdir(parents=True, exist_ok=True)
     settings.qa_memory_dir.mkdir(parents=True, exist_ok=True)
+    settings.chat_history_dir.mkdir(parents=True, exist_ok=True)
     settings.vector_path.mkdir(parents=True, exist_ok=True)
     return settings

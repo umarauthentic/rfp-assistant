@@ -16,6 +16,7 @@ vector_store/
 data/documents/
 data/generated_rfps/
 data/rfp_templates/
+data/chat_history/
 
 # OS
 .DS_Store

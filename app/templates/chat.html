@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RFP Knowledge Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/chat.css">
+</head>
+<body class="chat-page">
+<div class="chat-shell">
+    <aside class="chat-sidebar" id="chatSidebar">
+        <div class="chat-brand">
+            <a href="/" class="back-link" aria-label="Return to RFP Assistant">←</a>
+            <div>
+                <div class="eyebrow">RFP Assistant</div>
+                <strong>Knowledge Chat</strong>
+            </div>
+        </div>
+        <button class="new-chat-button" type="button" onclick="createConversation()">＋ New chat</button>
+        <div class="conversation-list" id="conversationList" aria-label="Chat history"></div>
+        <div class="sidebar-footer">
+            <a href="/">Response Builder</a>
+            <form method="post" action="/logout"><button type="submit" class="logout-button">Sign out</button></form>
+        </div>
+    </aside>
+
+    <main class="chat-main">
+        <header class="chat-topbar">
+            <button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="Toggle chat history">☰</button>
+            <div>
+                <h1 id="conversationTitle">New chat</h1>
+                <p>Answers are restricted to ingested RFP documents.</p>
+            </div>
+            <span class="grounded-badge">Grounded only</span>
+        </header>
+
+        <section class="message-scroll" id="messageScroll" aria-live="polite">
+            <div class="chat-empty" id="chatEmpty">
+                <div class="empty-mark">RFP</div>
+                <h2>Ask your RFP knowledge base</h2>
+                <p>Questions outside the ingested documents will be declined.</p>
+                <div class="suggestion-grid">
+                    <button type="button" onclick="useSuggestion(this)">What capabilities are described in the RFP data?</button>
+                    <button type="button" onclick="useSuggestion(this)">Summarize the documented implementation approach.</button>
+                    <button type="button" onclick="useSuggestion(this)">What security information is available?</button>
+                </div>
+            </div>
+            <div id="messages" class="messages"></div>
+        </section>
+
+        <div class="composer-wrap">
+            <form class="chat-composer" id="chatForm">
+                <textarea id="chatInput" rows="1" maxlength="4000" placeholder="Ask about the ingested RFP data…" aria-label="Chat message"></textarea>
+                <button id="sendButton" type="submit" aria-label="Send message">↑</button>
+            </form>
+            <p class="composer-note">Responses use only indexed documents. Always verify critical details against the cited source.</p>
+        </div>
+    </main>
+</div>
+<script src="/static/chat.js"></script>
+</body>
+</html>

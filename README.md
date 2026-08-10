@@ -10,6 +10,7 @@ A local-first RFP response builder for generating vendor answers from historical
 - Show source document references for generated answers.
 - Export answers into a Word `.docx` response document.
 - Store and search historical approved answers.
+- Chat with ingested RFP documents in a dedicated, conversation-based interface.
 - Runs locally on Windows with FastAPI, FAISS, Sentence Transformers, and Ollama.
 
 ## Windows Deployment
@@ -151,6 +152,18 @@ The FastAPI health check is available at:
 http://localhost:8001/health
 ```
 
+### RFP Knowledge Chat
+
+Open the dedicated chat interface at:
+
+```text
+http://localhost:8001/chat
+```
+
+The chat searches only the ingested document index. Questions without sufficiently relevant RFP context are declined instead of being answered from general model knowledge. Conversations and their messages are stored locally under `data\chat_history`, appear in the history sidebar, and can be reopened or deleted from the chat page.
+
+Re-ingest documents after changing files under `data\documents` so the chat uses the latest RFP data.
+
 ## Remote Access With ngrok
 
 Do not expose Ollama directly. Keep `OLLAMA_BASE_URL=http://localhost:11434` and expose only the application port, which defaults to `8001`.
@@ -240,6 +253,10 @@ Important limitations:
 - `POST /upload`
 - `POST /ingest/documents`
 - `POST /query`
+- `GET /chat`
+- `GET|POST /api/chat/conversations`
+- `GET|DELETE /api/chat/conversations/{conversation_id}`
+- `POST /api/chat/conversations/{conversation_id}/messages`
 - `POST /rfp/template/upload`
 - `GET /rfp/template/questions`
 - `POST /rfp/answer-one`

@@ -25,6 +25,8 @@ from app.ingestion.chunking import make_chunks
 from app.rag.vector_store import FaissStore
 from app.rag.models import QueryRequest, QueryResponse, SaveAnswerRequest
 from app.rag.pipeline import answer_query
+from app.rag.chat import answer_chat_question
+from app.rag.chat_store import ChatStore
 from app.rag.memory import delete_qa_from_disk, save_qa_to_disk, rebuild_memory_index, list_memory_items
 from dotenv import load_dotenv
 
@@ -36,6 +38,7 @@ DEFAULT_RFP_TEMPLATE_PATH = Path("app/templates/AORN LMS Evaluation.docx")
 UPLOADED_RFP_TEMPLATE_DIR = Path(settings.data_dir) / "rfp_templates"
 UPLOADED_RFP_TEMPLATE_STEM = "uploaded-rfp-template"
 GENERATED_RFP_DIR = Path(settings.data_dir) / "generated_rfps"
+chat_store = ChatStore(settings.chat_history_dir)
 SUPPORTED_RFP_TEMPLATE_EXTENSIONS = {".docx", ".xlsx", ".xlsm"}
 
 app = FastAPI(title=settings.app_name)
@@ -74,6 +77,14 @@ class RfpSingleAnswerRequest(BaseModel):
 class RfpBuildRequest(BaseModel):
     items: list[RfpQuestionItem] = Field(min_length=1, max_length=200)
     title: str = Field(default="Generated RFP Response", max_length=200)
+
+
+class ChatConversationRequest(BaseModel):
+    title: str = Field(default="New chat", max_length=100)
+
+
+class ChatMessageRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
 
 
 def _auth_secret() -> str:
@@ -519,6 +530,11 @@ def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_form():
     if not settings.app_password:
@@ -647,6 +663,52 @@ def query(request: QueryRequest):
         use_memory=request.use_memory,
         use_documents=request.use_documents,
     )
+
+
+@app.get("/api/chat/conversations")
+def list_chat_conversations():
+    return {"conversations": chat_store.list()}
+
+
+@app.post("/api/chat/conversations")
+def create_chat_conversation(request: ChatConversationRequest):
+    return {"conversation": chat_store.create(request.title)}
+
+
+@app.get("/api/chat/conversations/{conversation_id}")
+def get_chat_conversation(conversation_id: str):
+    conversation = chat_store.get(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"conversation": conversation}
+
+
+@app.delete("/api/chat/conversations/{conversation_id}")
+def delete_chat_conversation(conversation_id: str):
+    if not chat_store.delete(conversation_id):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True}
+
+
+@app.post("/api/chat/conversations/{conversation_id}/messages")
+def send_chat_message(conversation_id: str, request: ChatMessageRequest):
+    conversation = chat_store.get(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    question = request.message.strip()
+    result = answer_chat_question(question, conversation.get("messages", []))
+    updated = chat_store.add_exchange(
+        conversation_id=conversation_id,
+        question=question,
+        answer=result["answer"],
+        sources=result["sources"],
+        in_scope=result["in_scope"],
+    )
+    return {
+        "conversation": updated,
+        "message": updated["messages"][-1],
+    }
 
 
 @app.get("/rfp/template/questions")
